@@ -50,6 +50,39 @@ def evaluate_model(model, testRatings, testNegatives, K, num_thread):
         ndcgs.append(ndcg)      
     return (hits, ndcgs)
 
+
+def evaluate_model_stance(model, testRatings, testNegatives, testNegativesDrec ,K, num_thread):
+    """
+    Evaluate the performance (Hit_Ratio, NDCG) of top-K recommendation
+    Return: score of each test rating.
+    """
+    global _model
+    global _testRatings
+    global _testNegatives
+    global _testNegativesDrec
+    global _K
+    _model = model
+    _testRatings = testRatings
+    _testNegatives = testNegatives
+    _testNegativesDrec = testNegativesDrec
+    _K = K
+
+    hits, ndcgs = [], []
+    if (num_thread > 1):  # Multi-thread
+        pool = multiprocessing.Pool(processes=num_thread)
+        res = pool.map(eval_one_rating, range(len(_testRatings)))
+        pool.close()
+        pool.join()
+        hits = [r[0] for r in res]
+        ndcgs = [r[1] for r in res]
+        return (hits, ndcgs)
+    # Single thread
+    for idx in xrange(len(_testRatings)):
+        (hr, ndcg) = eval_one_rating_stance(idx)
+        hits.append(hr)
+        ndcgs.append(ndcg)
+    return (hits, ndcgs)
+
 def eval_one_rating(idx):
     rating = _testRatings[idx]
     items = _testNegatives[idx]
@@ -66,6 +99,33 @@ def eval_one_rating(idx):
         map_item_score[item] = predictions[i]
     items.pop()
     
+    # Evaluate top rank list
+    ranklist = heapq.nlargest(_K, map_item_score, key=map_item_score.get)
+    hr = getHitRatio(ranklist, gtItem)
+    ndcg = getNDCG(ranklist, gtItem)
+    return (hr, ndcg)
+
+
+def eval_one_rating_stance(idx):
+    rating = _testRatings[idx]
+    stance1 = _testRatings[idx][2]
+    items = _testNegatives[idx]
+    direx = _testNegativesDrec[idx]
+    u = rating[0]
+    gtItem = rating[1]
+    items.append(gtItem)
+    # Get prediction scores
+    map_item_score = {}
+    users = np.full(len(items), u, dtype='int32')
+    stance = np.array(direx)
+    stance = np.concatenate((stance,[stance1]))
+    predictions = _model.predict([users, np.array(items),stance],
+                                 batch_size=100, verbose=0)
+    for i in xrange(len(items)):
+        item = items[i]
+        map_item_score[item] = predictions[i]
+    items.pop()
+
     # Evaluate top rank list
     ranklist = heapq.nlargest(_K, map_item_score, key=map_item_score.get)
     hr = getHitRatio(ranklist, gtItem)

@@ -5,7 +5,7 @@ from tqdm import tqdm
 import utils.tools as tools
 def outfile(file,stritem):
     with open(file,"aw+") as f:
-            f.write(stritem +  "\n")
+            f.write(stritem + "\n")
 
 tools.deletefilesmovies(["Data/ml-1m.test.negtive.stance.newindex"])
 test_id_index = {}
